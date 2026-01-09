@@ -1,16 +1,16 @@
 # yaml-language-server: $schema=https://coderabbit.ai/integrations/schema.v2.json
 language: "en-US"
 reviews:
-  profile: "chill" # Options: chill, assertive, high_level
+  profile: "chill"
   request_changes_workflow: false
   high_level_summary: true
   auto_review:
     enabled: true
     drafts: false
-    # The pattern below ".*" enables reviews for PRs targeting ANY branch.
-    # By default, this is set to only ["main", "master"].
+    # CHANGED: Now only targets 'main'.
+    # If you also want to include 'master', change this to ["main", "master"]
     base_branches:
-      - ".*" 
+      - "main"
   tools:
     ast_grep:
       enabled: true

@@ -4,81 +4,108 @@ import numpy as np
 import seaborn as sns
 import matplotlib.pyplot as plt
 import os
-from datetime import datetime, timedelta
-import nltk
-import emoji
-import plotly.graph_objs as go
-from sqlalchemy import create_engine
-from plotly.offline import iplot
-from collections import Counter
-from wordcloud import WordCloud, STOPWORDS
+import plotly.express as px
 
-# nltk.download('vader_lexicon')
+# 1. Page Configuration (Must be the first Streamlit command)
+st.set_page_config(page_title="YouTube Analytics", layout="wide")
 
-from nltk.sentiment.vader import SentimentIntensityAnalyzer
 
-# 1. Shows all columns (You already have this)
-pd.set_option('display.max_columns', None)
+# 2. CACHED DATA LOADING (Fixes the 5-minute wait)
+@st.cache_data
+def load_and_prep_data():
+    # Update this path to your specific folder
+    path = r'C:\Users\leona\PycharmProjects\Python Data Analysis Projects\AAProject sets - 2\youtube-videos-data-analysis\additional_data'
 
-# 2. DISABLES WRAPPING by setting the display width to a very high number
-pd.set_option('display.width', 1000)
+    files = os.listdir(path)
+    files_csv = [file for file in files if '.csv' in file]
 
-import  warnings
-from warnings import filterwarnings
-filterwarnings("ignore")
+    full_df = pd.DataFrame()
+    for file in files_csv:
+        # Construct full path safely
+        file_path = os.path.join(path, file)
+        current_df = pd.read_csv(file_path, encoding='iso-8859-1', on_bad_lines='skip')
+        full_df = pd.concat([full_df, current_df], ignore_index=True)
 
-files = os.listdir(r'C:\Users\leona\PycharmProjects\Python Data Analysis Projects\AAProject sets - 2\youtube-videos-data-analysis\additional_data')
+    # Remove duplicates
+    full_df = full_df.drop_duplicates()
 
-files_csv = [file for file in files if '.csv' in file]
+    # Load Categories
+    json_path = os.path.join(path, 'US_category_id.json')
+    json_df = pd.read_json(json_path)
 
-# print(files_csv)
-full_df = pd.DataFrame()
-path = r'C:\Users\leona\PycharmProjects\Python Data Analysis Projects\AAProject sets - 2\youtube-videos-data-analysis\additional_data'
+    cat_dict = {}
+    for item in json_df['items'].values:
+        cat_dict[int(item['id'])] = item['snippet']['title']
 
-for file in files_csv:
-    current_df = pd.read_csv(path+'/'+file, encoding='iso-8859-1', on_bad_lines='skip')
-    full_df = pd.concat([full_df,current_df], ignore_index=True)
+    full_df['category_name'] = full_df['category_id'].map(cat_dict)
 
-# print(full_df[full_df.duplicated()].shape)
+    # Calculate Rates
+    full_df['like_rate'] = (full_df['likes'] / full_df['views']) * 100
+    full_df['dislike_rate'] = (full_df['dislikes'] / full_df['views']) * 100
+    full_df['comment_count_rate'] = (full_df['comment_count'] / full_df['views']) * 100
 
-full_df = full_df.drop_duplicates()
+    return full_df
 
-# print(full_df['category_id'].unique())
 
-json_df = pd.read_json(r'C:\Users\leona\PycharmProjects\Python Data Analysis Projects\AAProject sets - 2\youtube-videos-data-analysis\additional_data/US_category_id.json')
-# print(json_df['items'][0])
+# --- MAIN APP UI ---
 
-cat_dict = {}
+st.title("📊 YouTube Video Analysis Dashboard")
 
-for item in json_df['items'].values:
-    cat_dict[int(item['id'])] = item['snippet']['title']
+# Load data with a spinner so the user knows it's working
+with st.spinner('Loading massive dataset...'):
+    full_df = load_and_prep_data()
 
-full_df['category_name'] = full_df['category_id'].map(cat_dict)
-# print(cat_dict)
-# print(full_df.head(10))
+# Optional: Show Raw Data in an expander
+with st.expander("View Raw Data Snippet"):
+    st.dataframe(full_df.head(100))
 
-# ... (All your previous code remains the same)
+st.markdown("---")
 
-full_df['category_name'] = full_df['category_id'].map(cat_dict)
+# --- SECTION 1: CATEGORY DISTRIBUTION (Side-by-Side) ---
+st.subheader("Category Performance Analysis")
 
-# --- START OF STREAMLIT UI ---
+col1, col2 = st.columns(2)
 
-st.title("YouTube Data Analysis")
-st.write("Data loaded successfully! Generating chart...")
+with col1:
+    st.markdown("**1. Distribution of Likes (Log Scale)**")
+    fig1 = plt.figure(figsize=(10, 6))
+    sns.boxplot(x='category_name', y='likes', data=full_df)
+    plt.yscale('log')
+    plt.xticks(rotation=90)
+    plt.title("Likes per Category (Log Scale)")
+    st.pyplot(fig1)
 
-# 1. Create a Figure Object explicitly
-fig = plt.figure(figsize=(14, 8))
+with col2:
+    st.markdown("**2. Like Rate (Likes / Views)**")
+    fig2 = plt.figure(figsize=(10, 6))
+    sns.boxplot(x='category_name', y='like_rate', data=full_df)
+    plt.xticks(rotation=90)
+    plt.title("Like Rate % per Category")
+    st.pyplot(fig2)
 
-# 2. Create the Boxplot (Seaborn draws on the active figure 'fig')
-sns.boxplot(x='category_name', y='likes', data=full_df)
+st.markdown("---")
 
-# 3. Apply Log Scale & Formatting
-plt.yscale('log')
-plt.xticks(rotation='vertical')
-plt.title("Distribution of Likes by Category (Log Scale)", fontsize=16)
-plt.xlabel("Category Name", fontsize=12)
-plt.ylabel("Likes (Log Scale)", fontsize=12)
+# --- SECTION 2: CORRELATIONS (Side-by-Side) ---
+st.subheader("Correlation & Regression Analysis")
 
-# 4. STREAMLIT DISPLAY COMMAND
-# Instead of plt.show(), we pass the 'fig' object to Streamlit
-st.pyplot(fig)
+col3, col4 = st.columns(2)
+
+with col3:
+    st.markdown("**3. Correlation Heatmap**")
+    # Calculate correlation matrix
+    corr_matrix = full_df[['views', 'likes', 'dislikes']].corr()
+
+    fig3 = plt.figure(figsize=(8, 6))
+    sns.heatmap(corr_matrix, annot=True, cmap='coolwarm')
+    plt.title("Correlation: Views vs Likes vs Dislikes")
+    st.pyplot(fig3)
+
+with col4:
+    st.markdown("**4. Regression: Views vs. Likes**")
+    # We take a sample to speed up the regression plot rendering
+    sample_df = full_df.sample(n=5000, random_state=42)
+
+    fig4 = plt.figure(figsize=(10, 6))
+    sns.regplot(x='views', y='likes', data=sample_df, scatter_kws={'alpha': 0.5})
+    plt.title("Regression Plot (Sampled Data)")
+    st.pyplot(fig4)

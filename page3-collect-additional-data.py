@@ -45,8 +45,8 @@ full_df = full_df.drop_duplicates()
 
 print(full_df.shape)
 
-full_df[0:1000].to_csv(r'C:\Users\leona\PycharmProjects\Python Data Analysis Projects\AAProject sets - 2\youtube-videos-data-analysis\export_data/youtube_sample.csv', index = False)
-full_df[0:1000].to_json(r'C:\Users\leona\PycharmProjects\Python Data Analysis Projects\AAProject sets - 2\youtube-videos-data-analysis\export_data/youtube_sample.json')
+full_df[0:400000].to_csv(r'C:\Users\leona\PycharmProjects\Python Data Analysis Projects\AAProject sets - 2\youtube-videos-data-analysis\export_data/youtube_sample.csv', index = False)
+full_df[0:400000].to_json(r'C:\Users\leona\PycharmProjects\Python Data Analysis Projects\AAProject sets - 2\youtube-videos-data-analysis\export_data/youtube_sample.json')
 
 engine = create_engine(r"sqlite:///C:\Users\leona\PycharmProjects\Python Data Analysis Projects\AAProject sets - 2\youtube-videos-data-analysis\export_data\youtube_sample.sqlite")
 

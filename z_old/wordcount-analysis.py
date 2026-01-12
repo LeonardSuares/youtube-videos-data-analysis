@@ -24,7 +24,7 @@ filterwarnings("ignore")
 
 sia = SentimentIntensityAnalyzer()
 
-comments = pd.read_csv(r'C:\Users\leona\PycharmProjects\Python Data Analysis Projects\AAProject sets - 2\youtube-videos-data-analysis\UScomments.csv', on_bad_lines= 'skip')
+comments = pd.read_csv(r'UScomments.csv', on_bad_lines='skip')
 # print(comments.isnull().sum())
 comments.dropna(inplace=True)
 

@@ -27,13 +27,13 @@ import  warnings
 from warnings import filterwarnings
 filterwarnings("ignore")
 
-files = os.listdir(r'C:\Users\leona\PycharmProjects\Python Data Analysis Projects\AAProject sets - 2\youtube-videos-data-analysis\additional_data')
+files = os.listdir(r'/additional_data')
 
 files_csv = [file for file in files if '.csv' in file]
 
 # print(files_csv)
 full_df = pd.DataFrame()
-path = r'C:\Users\leona\PycharmProjects\Python Data Analysis Projects\AAProject sets - 2\youtube-videos-data-analysis\additional_data'
+path = r'/additional_data'
 
 for file in files_csv:
     current_df = pd.read_csv(path+'/'+file, encoding='iso-8859-1', on_bad_lines='skip')

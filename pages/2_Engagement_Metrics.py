@@ -1,111 +1,101 @@
 import streamlit as st
 import pandas as pd
-import numpy as np
-import seaborn as sns
-import matplotlib.pyplot as plt
-import os
 import plotly.express as px
+import plotly.graph_objects as go
+# CHANGE THIS LINE: Change load_and_prep_data to load_video_data
+from utils import load_video_data
 
-# 1. Page Configuration (Must be the first Streamlit command)
-st.set_page_config(page_title="YouTube Analytics", layout="wide")
+# 1. Page Configuration
+st.set_page_config(page_title="YouTube Engagement Analytics", layout="wide")
 
+st.title("📈 Engagement Metrics & Correlations")
 
-# 2. CACHED DATA LOADING (Fixes the 5-minute wait)
-@st.cache_data
-def load_and_prep_data():
-    # Update this path to your specific folder
-    path = r'C:\Users\leona\PycharmProjects\Python Data Analysis Projects\AAProject sets - 2\youtube-videos-data-analysis\additional_data'
+# 2. Data Loading
+with st.spinner('Accessing YouTube Dataset...'):
+    # AND CHANGE THIS LINE: Use the correct function name
+    full_df = load_video_data()
 
-    files = os.listdir(path)
-    files_csv = [file for file in files if '.csv' in file]
+# --- TOP KPI ROW ---
+avg_like_rate = full_df['like_rate'].mean()
+top_performing_cat = full_df.groupby('category_name')['like_rate'].mean().idxmax()
 
-    full_df = pd.DataFrame()
-    for file in files_csv:
-        # Construct full path safely
-        file_path = os.path.join(path, file)
-        current_df = pd.read_csv(file_path, encoding='iso-8859-1', on_bad_lines='skip')
-        full_df = pd.concat([full_df, current_df], ignore_index=True)
+m1, m2, m3 = st.columns(3)
+m1.metric("Avg. Global Like Rate", f"{avg_like_rate:.2f}%")
+m2.metric("Highest Engagement Category", top_performing_cat)
+m3.metric("Total Sampled Videos", f"{len(full_df):,}")
 
-    # Remove duplicates
-    full_df = full_df.drop_duplicates()
+st.divider()
 
-    # Load Categories
-    json_path = os.path.join(path, 'US_category_id.json')
-    json_df = pd.read_json(json_path)
+# --- SECTION 1: CATEGORY DISTRIBUTIONS ---
+st.subheader("Category Engagement Distribution")
+dist_col1, dist_col2 = st.columns(2)
 
-    cat_dict = {}
-    for item in json_df['items'].values:
-        cat_dict[int(item['id'])] = item['snippet']['title']
+with dist_col1:
+    st.markdown("### 🍯 Likes Spread (Log Scale)")
+    # Plotly Box handles Log Scale and Interactivity better
+    fig_likes = px.box(
+        full_df,
+        x='category_name',
+        y='likes',
+        color='category_name',
+        log_y=True,
+        template="plotly_white",
+        height=500
+    )
+    fig_likes.update_layout(showlegend=False, xaxis_title="", yaxis_title="Likes (Log)")
+    st.plotly_chart(fig_likes, use_container_width=True)
 
-    full_df['category_name'] = full_df['category_id'].map(cat_dict)
+with dist_col2:
+    st.markdown("### ⚡ Like Rate %")
+    fig_rate = px.box(
+        full_df,
+        x='category_name',
+        y='like_rate',
+        color='category_name',
+        template="plotly_white",
+        height=500
+    )
+    fig_rate.update_layout(showlegend=False, xaxis_title="", yaxis_title="Like Rate (%)")
+    # Setting a reasonable range for the Y-axis to avoid outlier stretching
+    fig_rate.update_yaxes(range=[0, full_df['like_rate'].quantile(0.95)])
+    st.plotly_chart(fig_rate, use_container_width=True)
 
-    # Calculate Rates
-    full_df['like_rate'] = (full_df['likes'] / full_df['views']) * 100
-    full_df['dislike_rate'] = (full_df['dislikes'] / full_df['views']) * 100
-    full_df['comment_count_rate'] = (full_df['comment_count'] / full_df['views']) * 100
+st.divider()
 
-    return full_df
-
-
-# --- MAIN APP UI ---
-
-st.title("📊 YouTube Video Analysis Dashboard")
-
-# Load data with a spinner so the user knows it's working
-with st.spinner('Loading massive dataset...'):
-    full_df = load_and_prep_data()
-
-# Optional: Show Raw Data in an expander
-with st.expander("View Raw Data Snippet"):
-    st.dataframe(full_df.head(100))
-
-st.markdown("---")
-
-# --- SECTION 1: CATEGORY DISTRIBUTION (Side-by-Side) ---
-st.subheader("Category Performance Analysis")
-
-col1, col2 = st.columns(2)
-
-with col1:
-    st.markdown("**1. Distribution of Likes (Log Scale)**")
-    fig1 = plt.figure(figsize=(10, 6))
-    sns.boxplot(x='category_name', y='likes', data=full_df)
-    plt.yscale('log')
-    plt.xticks(rotation=90)
-    plt.title("Likes per Category (Log Scale)")
-    st.pyplot(fig1)
-
-with col2:
-    st.markdown("**2. Like Rate (Likes / Views)**")
-    fig2 = plt.figure(figsize=(10, 6))
-    sns.boxplot(x='category_name', y='like_rate', data=full_df)
-    plt.xticks(rotation=90)
-    plt.title("Like Rate % per Category")
-    st.pyplot(fig2)
-
-st.markdown("---")
-
-# --- SECTION 2: CORRELATIONS (Side-by-Side) ---
+# --- SECTION 2: CORRELATIONS & REGRESSION ---
 st.subheader("Correlation & Regression Analysis")
+corr_col1, corr_col2 = st.columns([1, 1.2])
 
-col3, col4 = st.columns(2)
+with corr_col1:
+    st.markdown("### 🌡️ Metrics Heatmap")
+    corr_matrix = full_df[['views', 'likes', 'dislikes', 'comment_count']].corr()
 
-with col3:
-    st.markdown("**3. Correlation Heatmap**")
-    # Calculate correlation matrix
-    corr_matrix = full_df[['views', 'likes', 'dislikes']].corr()
+    # Plotly Heatmap for interactivity
+    fig_heat = px.imshow(
+        corr_matrix,
+        text_auto=".2f",
+        color_continuous_scale='RdBu_r',
+        aspect="auto",
+        template="plotly_white"
+    )
+    fig_heat.update_layout(margin=dict(l=10, r=10, t=10, b=10))
+    st.plotly_chart(fig_heat, use_container_width=True)
 
-    fig3 = plt.figure(figsize=(8, 6))
-    sns.heatmap(corr_matrix, annot=True, cmap='coolwarm')
-    plt.title("Correlation: Views vs Likes vs Dislikes")
-    st.pyplot(fig3)
+with corr_col2:
+    st.markdown("### 📉 Views vs. Likes Trend")
+    # Using a sample for performance, but Plotly Scatter is faster than Regplot
+    sample_df = full_df.sample(n=3000, random_state=42)
 
-with col4:
-    st.markdown("**4. Regression: Views vs. Likes**")
-    # We take a sample to speed up the regression plot rendering
-    sample_df = full_df.sample(n=5000, random_state=42)
-
-    fig4 = plt.figure(figsize=(10, 6))
-    sns.regplot(x='views', y='likes', data=sample_df, scatter_kws={'alpha': 0.5})
-    plt.title("Regression Plot (Sampled Data)")
-    st.pyplot(fig4)
+    fig_reg = px.scatter(
+        sample_df,
+        x='views',
+        y='likes',
+        trendline="ols",  # Adds the regression line
+        hover_data=['category_name'],
+        opacity=0.6,
+        color='category_name',
+        template="plotly_white",
+        height=500
+    )
+    fig_reg.update_layout(margin=dict(l=10, r=10, t=10, b=10))
+    st.plotly_chart(fig_reg, use_container_width=True)

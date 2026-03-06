@@ -1,6 +1,6 @@
 # 📺 YouTube Video Analytics Hub
 
-**Live Application:** [View on Streamlit Cloud]([your-link-here](https://youtube-videos-data-analysis-5kszowasilg4adq2caee9i.streamlit.app/))
+**Live Application:** (https://youtube-videos-data-analysis-5kszowasilg4adq2caee9i.streamlit.app/)
 
 ## 📖 Project Overview
 This project is a high-performance analytics dashboard designed to analyze 50,000+ viral YouTube videos. It serves as a comprehensive tool for content strategists to explore category trends, engagement correlations, and sentiment patterns using advanced data engineering and NLP techniques.

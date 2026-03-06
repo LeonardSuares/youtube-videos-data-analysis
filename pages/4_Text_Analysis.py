@@ -1,101 +1,110 @@
 import streamlit as st
 import pandas as pd
-import seaborn as sns
-import matplotlib.pyplot as plt
 import plotly.express as px
 import string
 import os
+# Import the centralized data loader from your utils file
+from utils import load_video_data
 
-# 1. Page Config
+# 1. Page Configuration
 st.set_page_config(page_title="YouTube Text Analysis", layout="wide")
 
-
-# 2. Cached Data Loading Function
-@st.cache_data
-def load_data():
-    # Update this path if you move the file
-    file_path = r'C:\Users\leona\PycharmProjects\Python Data Analysis Projects\AAProject sets - 2\youtube-videos-data-analysis\export_data\youtube_sample.csv'
-
-    # Check if file exists to prevent hard crash
-    if not os.path.exists(file_path):
-        st.error(f"File not found at: {file_path}")
-        return pd.DataFrame()
-
-    df = pd.read_csv(file_path)
-    return df
-
-
-# 3. Helper Function for Punctuation
+# 2. Helper Function for Punctuation
 def punc_count(text):
-    # Counts punctuation characters in a string
+    """Counts punctuation characters in a string to analyze 'clickbait' trends."""
     return len([char for char in str(text) if char in string.punctuation])
 
-
 # --- MAIN APP ---
-st.title("📝 YouTube Title & Channel Analysis")
+st.title("📝 Title Strategy & Channel Analysis")
 
-full_df = load_data()
+# 3. Load Data using the optimized Parquet loader
+with st.spinner('Loading text analysis data...'):
+    full_df = load_video_data()
 
 if not full_df.empty:
-    # Optional: Show data shape
-    with st.expander("View Raw Data Info"):
-        st.write(f"Dataset Shape: {full_df.shape}")
-        st.dataframe(full_df.head())
+    # --- TOP KPI SECTION ---
+    # Quick metrics to show high-level text trends
+    avg_punc = full_df['title'].apply(punc_count).mean()
+    most_active = full_df['channel_title'].value_counts().idxmax()
+
+    c1, c2, c3 = st.columns(3)
+    c1.metric("Avg. Punctuation per Title", f"{avg_punc:.1f}")
+    c2.metric("Most Active Channel", most_active)
+    c3.metric("Total Videos in Sample", f"{len(full_df):,}")
 
     st.divider()
 
-    # --- CHART 1: Top Channels (Plotly) ---
-    st.subheader("1. Top 20 Channels by Video Count")
+    # --- SECTION 1: CHANNEL VOLUME ---
+    st.subheader("📊 Content Volume by Channel")
+    st.caption("Which channels are the most frequent uploaders in this dataset?")
 
-    # Group and sort data
+    # Group and sort data for the bar chart
     cdf = full_df.groupby(['channel_title']).size().sort_values(ascending=False).reset_index()
-    cdf = cdf.rename(columns={0: 'total_videos'})
+    cdf.columns = ['channel_title', 'total_videos']
 
-    # Create interactive bar chart
+    # Horizontal bar chart is best for long channel names
     fig_bar = px.bar(
-        data_frame=cdf[0:20],
-        x='channel_title',
-        y='total_videos',
-        title="Top 20 Channels by Content Volume",
-        color='total_videos'  # Adds a nice color gradient
+        cdf.head(20),
+        y='channel_title',
+        x='total_videos',
+        orientation='h',
+        text='total_videos',
+        color='total_videos',
+        color_continuous_scale='Bluered',
+        template="plotly_white",
+        height=600,
+        title="Top 20 Channels by Video Count"
     )
+
+    fig_bar.update_layout(
+        yaxis={'categoryorder': 'total ascending'},
+        coloraxis_showscale=False,
+        margin=dict(l=20, r=20, t=40, b=20)
+    )
+
     st.plotly_chart(fig_bar, use_container_width=True)
 
     st.divider()
 
-    # --- CHART 2: Punctuation vs Views & Likes (Seaborn/Matplotlib) ---
-    st.subheader("2. Does Punctuation Affect Engagement?")
-    st.caption("Analyzing a sample of 10,000 videos to see if more punctuation correlates with Views or Likes.")
+    # --- SECTION 2: PUNCTUATION IMPACT ---
+    st.subheader("⁉️ Does Punctuation Drive Engagement?")
+    st.info("Analyzing if punctuation count (exclamation marks, question marks, etc.) correlates with higher views or likes.")
 
-    # Process Sample
-    sample = full_df[0:10000].copy()
+    # Create a copy for punctuation analysis
+    sample_size = min(10000, len(full_df))
+    sample = full_df.sample(sample_size).copy()
     sample['count_punc'] = sample['title'].apply(punc_count)
 
-    # CREATE TWO COLUMNS FOR SIDE-BY-SIDE PLOTS
-    col1, col2 = st.columns(2)
+    # Allow user to toggle between different success metrics
+    metric_choice = st.radio("Select Metric to Compare:", ["views", "likes"], horizontal=True)
 
-    # --- LEFT COLUMN: VIEWS ---
-    with col1:
-        st.markdown("**Impact on Views**")
-        fig_views, ax1 = plt.subplots(figsize=(10, 6))
+    # Interactive Plotly Box Plot
+    fig_punc = px.box(
+        sample,
+        x='count_punc',
+        y=metric_choice,
+        color='count_punc',
+        log_y=True,
+        points=False, # Hides outlier dots for a cleaner look
+        template="plotly_white",
+        color_discrete_sequence=px.colors.qualitative.Prism,
+        height=500,
+        labels={'count_punc': 'Punctuation Marks', 'views': 'Total Views', 'likes': 'Total Likes'}
+    )
 
-        sns.boxplot(x='count_punc', y='views', data=sample, ax=ax1)
-        ax1.set_yscale('log')  # Log scale
-        ax1.set_title("Views by Punctuation Count")
-        ax1.set_xlabel("Punctuation Marks")
-        ax1.set_ylabel("Views (Log Scale)")
+    fig_punc.update_layout(
+        showlegend=False,
+        margin=dict(l=20, r=20, t=10, b=20),
+        xaxis_title="Number of Punctuation Marks in Title"
+    )
 
-        st.pyplot(fig_views)
+    st.plotly_chart(fig_punc, use_container_width=True)
 
-    # --- RIGHT COLUMN: LIKES ---
-    with col2:
-        st.markdown("**Impact on Likes**")
-        fig_likes, ax2 = plt.subplots(figsize=(10, 6))
-
-        sns.boxplot(x='count_punc', y='likes', data=sample, ax=ax2)
-        ax2.set_yscale('log')  # Log scale
-        ax2.set_title("Likes by Punctuation Count")
-        ax2.set_xlabel("Punctuation Marks")
-        ax2.set_ylabel("Likes (Log Scale)")
-
-        st.pyplot(fig_likes)
+    with st.expander("💡 Data Insights"):
+        st.write(f"""
+        - **Metric Selected:** {metric_choice.title()}
+        - **Logarithmic Scale:** Used to account for the massive range between standard videos and viral hits.
+        - **Hover Action:** You can hover over each box to see the specific median, min, and max values for that group.
+        """)
+else:
+    st.error("Data could not be loaded. Please ensure 'videos_sample.parquet' exists in your /data folder.")
